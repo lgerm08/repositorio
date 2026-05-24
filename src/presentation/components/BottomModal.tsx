@@ -6,8 +6,11 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  Dimensions,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/useAppTheme';
@@ -31,6 +34,33 @@ type FormProps = BaseProps & {
 
 export type BottomModalProps = ConfirmationProps | FormProps;
 
+function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(() => Keyboard.metrics()?.height ?? 0);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const m = Keyboard.metrics();
+      if (m?.height) setHeight(m.height);
+    }, 300);
+
+    if (Platform.OS === 'ios') {
+      const sub = Keyboard.addListener('keyboardWillChangeFrame', (e) => {
+        const screenH = Dimensions.get('screen').height;
+        setHeight(e.endCoordinates.screenY >= screenH ? 0 : e.endCoordinates.height);
+      });
+      return () => { sub.remove(); clearTimeout(t); };
+    } else {
+      const show = Keyboard.addListener('keyboardDidShow', (e) => setHeight(e.endCoordinates.height));
+      const hide = Keyboard.addListener('keyboardDidHide', () => setHeight(0));
+      return () => { show.remove(); hide.remove(); clearTimeout(t); };
+    }
+  }, []);
+
+  return height;
+}
+
+const SLIDE_DISTANCE = 600;
+
 export function BottomModal(props: BottomModalProps) {
   const { visible, onClose, type } = props;
   const { colors, isDark } = useAppTheme();
@@ -39,6 +69,31 @@ export function BottomModal(props: BottomModalProps) {
   const inputRef = useRef<TextInput>(null);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitting = useRef(false);
+  const keyboardHeight = useKeyboardHeight();
+
+  // Internal visibility kept open during slide-out animation
+  const [internalVisible, setInternalVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(SLIDE_DISTANCE)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setInternalVisible(true);
+      slideAnim.setValue(SLIDE_DISTANCE);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: SLIDE_DISTANCE,
+        duration: 220,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => setInternalVisible(false));
+    }
+  }, [visible]);
 
   const sheetBg = isDark ? colors.gray900 : colors.background;
   const textColor = isDark ? '#ffffff' : colors.gray950;
@@ -50,7 +105,6 @@ export function BottomModal(props: BottomModalProps) {
       submitting.current = false;
       if (blurTimer.current) clearTimeout(blurTimer.current);
     } else if (type === 'form') {
-      // Re-focus when modal becomes visible again
       const t = setTimeout(() => inputRef.current?.focus(), 100);
       return () => clearTimeout(t);
     }
@@ -72,24 +126,28 @@ export function BottomModal(props: BottomModalProps) {
     onClose();
   };
 
+  // Sheet slides above the keyboard when it appears.
+  // paddingBottom covers the home-indicator area with the sheet background color.
+  const marginBottom = keyboardHeight > 0 ? keyboardHeight : 0;
+  const paddingBottom = insets.bottom + 24;
+
   return (
     <Modal
       transparent
-      visible={visible}
-      animationType="slide"
+      visible={internalVisible}
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-
-        <KeyboardAvoidingView
-          style={{ flex: 1, justifyContent: 'flex-end' }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
-        >
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View
-          style={[styles.sheet, { backgroundColor: sheetBg }]}
+
+        <Animated.View
+          style={[
+            styles.sheet,
+            { backgroundColor: sheetBg, paddingBottom, marginBottom },
+            { transform: [{ translateY: slideAnim }] },
+          ]}
         >
           {type === 'confirmation' ? (
             <>
@@ -125,6 +183,7 @@ export function BottomModal(props: BottomModalProps) {
                 autoCapitalize="sentences"
                 autoCorrect={false}
                 returnKeyType="done"
+                onBlur={handleFormBlur}
                 onSubmitEditing={handleFormSubmit}
               />
               <Button
@@ -136,11 +195,7 @@ export function BottomModal(props: BottomModalProps) {
               />
             </>
           )}
-        </View>
-        </KeyboardAvoidingView>
-
-        {/* Safe-area filler: outside KeyboardAvoidingView so não sobe com o teclado */}
-        <View style={{ height: insets.bottom, backgroundColor: sheetBg }} />
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -160,7 +215,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 32,
-    paddingBottom: 24,
     gap: 16,
   },
   title: {
