@@ -24,9 +24,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     getSessionUseCase.execute().then((u) => {
-      if (u) {
+      if (u && u.name) {
         setUser(u);
         setToken(authRepo.getToken());
+      } else {
+        authRepo.clearToken();
       }
     }).finally(() => setIsLoading(false));
   }, []);

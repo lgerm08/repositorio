@@ -11,4 +11,10 @@ export function runMigrations(): void {
       deleted INTEGER NOT NULL DEFAULT 0
     );
   `);
+  expoDb.execSync(`
+    CREATE TABLE IF NOT EXISTS auth (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
 }

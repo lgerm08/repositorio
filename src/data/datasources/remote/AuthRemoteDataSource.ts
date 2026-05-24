@@ -15,6 +15,7 @@ export class AuthRemoteDataSource {
 
   async getSession(): Promise<User> {
     const res = await apiClient.get('/auth/session');
-    return res.data;
+    // handle both `{ id, name, email }` and `{ user: { id, name, email } }` shapes
+    return res.data?.user ?? res.data;
   }
 }

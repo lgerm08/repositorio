@@ -5,5 +5,6 @@ export function useTasks() {
   return useQuery({
     queryKey: ['tasks'],
     queryFn: () => taskRepository.getTasks(),
+    staleTime: 0,
   });
 }

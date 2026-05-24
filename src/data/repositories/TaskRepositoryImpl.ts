@@ -15,17 +15,15 @@ export class TaskRepositoryImpl implements ITaskRepository {
   private local = new TaskLocalDataSource();
 
   async getTasks(): Promise<Task[]> {
-    // Return local immediately, sync from remote in background
-    const localTasks = this.local.getAll();
-    this.refreshFromRemote().catch(() => null);
-    return localTasks;
-  }
-
-  private async refreshFromRemote(): Promise<void> {
-    const remoteTasks = await this.remote.getTasks();
-    for (const rt of remoteTasks) {
-      this.local.upsertFromServer(rt.id, rt.name, rt.checked);
+    try {
+      const remoteTasks = await this.remote.getTasks();
+      for (const rt of remoteTasks) {
+        this.local.upsertFromServer(rt.id, rt.name, rt.checked);
+      }
+    } catch {
+      // offline — fall back to local only
     }
+    return this.local.getAll();
   }
 
   async createTask(name: string): Promise<Task> {

@@ -10,6 +10,7 @@ import { SplashScreen } from '../screens/SplashScreen';
 
 const prefix = Linking.createURL('/');
 
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const linking: any = {
   prefixes: [prefix, 'segurali://'],

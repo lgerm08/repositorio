@@ -1,125 +1,89 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { AppStackParamList } from '../../navigation/types';
 import { useSession } from '../../hooks/auth/useSession';
 import { useAuthContext } from '../../context/AuthContext';
 import { useAppTheme } from '../../theme/useAppTheme';
-import { AppColors } from '../../theme/colors';
+import { typography } from '../../theme/typography';
+import { InitialsAvatar } from '../../components/InitialsAvatar';
 
-export function ProfileScreen() {
+type Props = NativeStackScreenProps<AppStackParamList, 'Profile'>;
+
+export function ProfileScreen({ navigation }: Props) {
   const { user } = useSession();
   const { clearAuth } = useAuthContext();
-  const { colors, typography } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
-  const styles = useMemo(() => createStyles(colors, typography), [colors, typography]);
-
-  const initials = user?.name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('') ?? '?';
+  const textColor = isDark ? '#ffffff' : colors.gray950;
+  const iconColor = isDark ? '#ffffff' : colors.gray950;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.avatarContainer}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
-        <Text style={styles.name}>{user?.name ?? '—'}</Text>
-        <Text style={styles.email}>{user?.email ?? '—'}</Text>
-      </View>
-
-      <View style={styles.infoCard}>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Nome</Text>
-          <Text style={styles.infoValue}>{user?.name ?? '—'}</Text>
-        </View>
-        <View style={[styles.infoRow, styles.infoRowLast]}>
-          <Text style={styles.infoLabel}>E-mail</Text>
-          <Text style={styles.infoValue}>{user?.email ?? '—'}</Text>
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.logoutBtn} onPress={clearAuth}>
-        <Text style={styles.logoutText}>Fazer logout</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.back}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="chevron-back" size={24} color={iconColor} />
       </TouchableOpacity>
-    </View>
+
+      <View style={styles.center}>
+        <View style={styles.avatarWrapper}>
+          <InitialsAvatar name={user?.name} size={192} />
+        </View>
+        <Text style={[styles.name, { color: textColor }]}>{user?.name ?? ''}</Text>
+        <Text style={[styles.email, { color: colors.gray500 }]}>{user?.email ?? ''}</Text>
+      </View>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.logoutBtn, { backgroundColor: colors.red }]}
+          onPress={clearAuth}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.logoutText}>Sair</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
-function createStyles(colors: AppColors, typography: any) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-      padding: 24,
-    },
-    avatarContainer: {
-      alignItems: 'center',
-      marginBottom: 32,
-      marginTop: 16,
-    },
-    avatar: {
-      width: 88,
-      height: 88,
-      borderRadius: 44,
-      backgroundColor: colors.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    avatarText: {
-      fontSize: typography.size.xxl,
-      fontWeight: typography.weight.bold,
-      color: '#fff',
-    },
-    name: {
-      fontSize: typography.size.xl,
-      fontWeight: typography.weight.bold,
-      color: colors.text,
-      marginBottom: 4,
-    },
-    email: {
-      fontSize: typography.size.sm,
-      color: colors.textSecondary,
-    },
-    infoCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 32,
-    },
-    infoRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    infoRowLast: { borderBottomWidth: 0 },
-    infoLabel: {
-      fontSize: typography.size.sm,
-      color: colors.textSecondary,
-      fontWeight: typography.weight.medium,
-    },
-    infoValue: {
-      fontSize: typography.size.sm,
-      color: colors.text,
-      maxWidth: '60%',
-      textAlign: 'right',
-    },
-    logoutBtn: {
-      height: 48,
-      backgroundColor: colors.error,
-      borderRadius: 10,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    logoutText: {
-      fontSize: typography.size.md,
-      fontWeight: typography.weight.semiBold,
-      color: '#fff',
-    },
-  });
-}
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  back: { marginTop: 16, marginLeft: 20 },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarWrapper: {
+    marginBottom: 24,
+  },
+  name: {
+    fontFamily: typography.fontFamily.semiBold,
+    fontSize: 18,
+    marginBottom: 6,
+  },
+  email: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: 16,
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  logoutBtn: {
+    height: 52,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutText: {
+    fontFamily: typography.fontFamily.semiBold,
+    fontSize: 16,
+    color: '#ffffff',
+  },
+});

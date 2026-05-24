@@ -9,7 +9,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'SignUpPassword'>;
 export function SignUpPasswordScreen({ navigation, route }: Props) {
   const [password, setPassword] = useState('');
   const { name, email } = route.params;
-  const { mutate: signUp, isPending, error } = useSignUp();
+  const { mutate: signUp, isPending } = useSignUp();
 
   return (
     <AuthStepScreen
@@ -25,7 +25,7 @@ export function SignUpPasswordScreen({ navigation, route }: Props) {
       buttonLabel="Criar conta"
       buttonPrimary
       loading={isPending}
-      error={(error as any)?.response?.data?.message}
+
     />
   );
 }

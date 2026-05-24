@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
+import { LoadingOverlay } from './LoadingOverlay';
 import { useAppTheme } from '../theme/useAppTheme';
 import { typography } from '../theme/typography';
 import { AppColors } from '../theme/colors';
@@ -64,6 +65,7 @@ export function AuthStepScreen({
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <LoadingOverlay visible={loading} />
       <KeyboardAvoidingView
         style={styles.keyboard}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
