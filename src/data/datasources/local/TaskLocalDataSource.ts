@@ -8,6 +8,7 @@ interface TaskRow {
   checked: number;
   sync_status: SyncStatus;
   deleted: number;
+  user_id: string;
 }
 
 function mapRow(row: TaskRow): Task {
@@ -21,23 +22,26 @@ function mapRow(row: TaskRow): Task {
 }
 
 export class TaskLocalDataSource {
-  getAll(): Task[] {
+  getAll(userId: string): Task[] {
     const rows = expoDb.getAllSync<TaskRow>(
-      'SELECT * FROM tasks WHERE deleted = 0 ORDER BY rowid ASC',
+      'SELECT * FROM tasks WHERE deleted = 0 AND user_id = ? ORDER BY rowid ASC',
+      [userId],
     );
     return rows.map(mapRow);
   }
 
-  getPending(): Task[] {
+  getPending(userId: string): Task[] {
     const rows = expoDb.getAllSync<TaskRow>(
-      "SELECT * FROM tasks WHERE sync_status = 'pending' AND deleted = 0",
+      "SELECT * FROM tasks WHERE sync_status = 'pending' AND deleted = 0 AND user_id = ?",
+      [userId],
     );
     return rows.map(mapRow);
   }
 
-  getPendingDeletes(): Task[] {
+  getPendingDeletes(userId: string): Task[] {
     const rows = expoDb.getAllSync<TaskRow>(
-      'SELECT * FROM tasks WHERE deleted = 1 AND server_id IS NOT NULL',
+      'SELECT * FROM tasks WHERE deleted = 1 AND server_id IS NOT NULL AND user_id = ?',
+      [userId],
     );
     return rows.map(mapRow);
   }
@@ -47,10 +51,10 @@ export class TaskLocalDataSource {
     return row ? mapRow(row) : null;
   }
 
-  insert(task: Task): void {
+  insert(task: Task, userId: string): void {
     expoDb.runSync(
-      'INSERT INTO tasks (id, server_id, name, checked, sync_status, deleted) VALUES (?, ?, ?, ?, ?, 0)',
-      [task.id, task.serverId ?? null, task.name, task.checked ? 1 : 0, task.syncStatus],
+      'INSERT INTO tasks (id, server_id, name, checked, sync_status, deleted, user_id) VALUES (?, ?, ?, ?, ?, 0, ?)',
+      [task.id, task.serverId ?? null, task.name, task.checked ? 1 : 0, task.syncStatus, userId],
     );
   }
 
@@ -76,20 +80,20 @@ export class TaskLocalDataSource {
     expoDb.runSync('DELETE FROM tasks WHERE id = ?', [id]);
   }
 
-  upsertFromServer(serverId: string, name: string, checked: boolean): void {
+  upsertFromServer(serverId: string, name: string, checked: boolean, userId: string): void {
     const existing = expoDb.getFirstSync<TaskRow>(
-      'SELECT * FROM tasks WHERE server_id = ?',
-      [serverId],
+      'SELECT * FROM tasks WHERE server_id = ? AND user_id = ?',
+      [serverId, userId],
     );
     if (existing) {
       expoDb.runSync(
-        "UPDATE tasks SET name = ?, checked = ?, sync_status = 'synced' WHERE server_id = ?",
-        [name, checked ? 1 : 0, serverId],
+        "UPDATE tasks SET name = ?, checked = ?, sync_status = 'synced' WHERE server_id = ? AND user_id = ?",
+        [name, checked ? 1 : 0, serverId, userId],
       );
     } else {
       expoDb.runSync(
-        "INSERT INTO tasks (id, server_id, name, checked, sync_status, deleted) VALUES (?, ?, ?, ?, 'synced', 0)",
-        [generateId(), serverId, name, checked ? 1 : 0],
+        "INSERT INTO tasks (id, server_id, name, checked, sync_status, deleted, user_id) VALUES (?, ?, ?, ?, 'synced', 0, ?)",
+        [generateId(), serverId, name, checked ? 1 : 0, userId],
       );
     }
   }

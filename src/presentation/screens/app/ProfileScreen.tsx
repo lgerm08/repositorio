@@ -57,7 +57,8 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 48,
   },
   avatarWrapper: {
     marginBottom: 24,

@@ -80,20 +80,16 @@ export function BottomModal(props: BottomModalProps) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={styles.overlay}>
 
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
+        <Pressable style={styles.backdrop} onPress={onClose} />
         <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: sheetBg,
-              paddingBottom: insets.bottom + 24,
-            },
-          ]}
+          style={[styles.sheet, { backgroundColor: sheetBg }]}
         >
           {type === 'confirmation' ? (
             <>
@@ -129,7 +125,6 @@ export function BottomModal(props: BottomModalProps) {
                 autoCapitalize="sentences"
                 autoCorrect={false}
                 returnKeyType="done"
-                onBlur={handleFormBlur}
                 onSubmitEditing={handleFormSubmit}
               />
               <Button
@@ -142,7 +137,11 @@ export function BottomModal(props: BottomModalProps) {
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+
+        {/* Safe-area filler: outside KeyboardAvoidingView so não sobe com o teclado */}
+        <View style={{ height: insets.bottom, backgroundColor: sheetBg }} />
+      </View>
     </Modal>
   );
 }
@@ -161,6 +160,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 32,
+    paddingBottom: 24,
     gap: 16,
   },
   title: {

@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  Dimensions,
   TextInputProps,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { LoadingOverlay } from './LoadingOverlay';
@@ -34,6 +35,37 @@ export interface AuthStepScreenProps
   error?: string;
   /** Shows a loading spinner on the button and prevents interaction. */
   loading?: boolean;
+  /** Extra pixels between the top of the keyboard and the button. Defaults to 56. */
+  keyboardPaddingOffset?: number;
+}
+
+function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(() => Keyboard.metrics()?.height ?? 0);
+
+  useEffect(() => {
+    // Delayed fallback: catches cases where keyboard is mid-transition on mount
+    // (e.g. email → password causes a keyboard-type change that makes metrics() stale)
+    const t = setTimeout(() => {
+      const m = Keyboard.metrics();
+      if (m?.height) setHeight(m.height);
+    }, 300);
+
+    if (Platform.OS === 'ios') {
+      // Single event that covers appear, disappear, AND type-change transitions —
+      // avoids the hide→show gap that occurs when switching to secureTextEntry
+      const sub = Keyboard.addListener('keyboardWillChangeFrame', (e) => {
+        const screenH = Dimensions.get('screen').height;
+        setHeight(e.endCoordinates.screenY >= screenH ? 0 : e.endCoordinates.height);
+      });
+      return () => { sub.remove(); clearTimeout(t); };
+    } else {
+      const show = Keyboard.addListener('keyboardDidShow', (e) => setHeight(e.endCoordinates.height));
+      const hide = Keyboard.addListener('keyboardDidHide', () => setHeight(0));
+      return () => { show.remove(); hide.remove(); clearTimeout(t); };
+    }
+  }, []);
+
+  return height;
 }
 
 export function AuthStepScreen({
@@ -52,9 +84,12 @@ export function AuthStepScreen({
   buttonPrimary = false,
   error,
   loading = false,
+  keyboardPaddingOffset = 56,
 }: AuthStepScreenProps) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
 
   const titleColor = isDark ? '#ffffff' : colors.gray950;
   const iconColor = isDark ? '#ffffff' : colors.gray950;
@@ -63,13 +98,19 @@ export function AuthStepScreen({
   const buttonBg = buttonPrimary ? colors.primary : isDark ? '#ffffff' : colors.gray950;
   const buttonTextColor = buttonPrimary ? '#ffffff' : isDark ? colors.gray950 : '#ffffff';
 
+  // When keyboard is visible its height already includes the bottom safe area on iOS,
+  // so we skip the SafeAreaView bottom edge and manage it manually here.
+  const paddingBottom = keyboardHeight > 0
+    ? keyboardHeight + keyboardPaddingOffset
+    : insets.bottom + keyboardPaddingOffset;
+
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: colors.background }]}
+      edges={['top', 'left', 'right']}
+    >
       <LoadingOverlay visible={loading} />
-      <KeyboardAvoidingView
-        style={styles.keyboard}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <View style={[styles.container, { paddingBottom }]}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.back}
@@ -105,7 +146,7 @@ export function AuthStepScreen({
           disabled={continueDisabled ?? !value.trim()}
           loading={loading}
         />
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -113,7 +154,7 @@ export function AuthStepScreen({
 function createStyles(colors: AppColors) {
   return StyleSheet.create({
     safe: { flex: 1 },
-    keyboard: { flex: 1, paddingHorizontal: 24, paddingBottom: 16 },
+    container: { flex: 1, paddingHorizontal: 24 },
     back: { marginTop: 16 },
     title: {
       fontFamily: typography.fontFamily.semiBold,

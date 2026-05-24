@@ -1,6 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthStackParamList } from './types';
+import { useAppTheme } from '../theme/useAppTheme';
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
 import { SignUpNameScreen } from '../screens/auth/SignUpNameScreen';
 import { SignUpEmailScreen } from '../screens/auth/SignUpEmailScreen';
@@ -11,8 +12,9 @@ import { SignInPasswordScreen } from '../screens/auth/SignInPasswordScreen';
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export function AuthNavigator() {
+  const { colors } = useAppTheme();
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="SignUpName" component={SignUpNameScreen} />
       <Stack.Screen name="SignUpEmail" component={SignUpEmailScreen} />

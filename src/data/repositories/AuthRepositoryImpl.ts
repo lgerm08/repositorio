@@ -24,33 +24,27 @@ export class AuthRepositoryImpl implements IAuthRepository {
   }
 
   async getSession(): Promise<User | null> {
-    // 1. Try session API with stored token
-    const token = this.local.getToken();
-    if (token) {
-      try {
-        const apiUser = await this.remote.getSession();
-        this.local.saveUser(apiUser);
-        return apiUser;
-      } catch {
-        // token invalid or no network — fall through
-      }
-    }
-
-    // 2. Try re-authenticating with stored credentials (handles token expiry and reloads)
     const creds = this.local.getCredentials();
+    const localUser = this.local.getUser();
+
     if (creds) {
       try {
         const result = await this.remote.signIn(creds.email, creds.password);
         this.local.saveToken(result.token);
         this.local.saveUser(result.user);
         return result.user;
-      } catch {
-        // API unreachable — fall through to local user
+      } catch (err: any) {
+        if (!err.response) {
+          // Network unreachable — offline, use cached user (Rule 2)
+          return localUser;
+        }
+        // HTTP error — credentials rejected, force re-login (Rule 1)
+        return null;
       }
     }
 
-    // 3. Offline fallback: return locally cached user data
-    return this.local.getUser();
+    // No stored credentials — use whatever local data exists (null → Welcome page)
+    return localUser;
   }
 
   saveToken(token: string): void {

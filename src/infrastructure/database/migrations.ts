@@ -17,4 +17,10 @@ export function runMigrations(): void {
       value TEXT NOT NULL
     );
   `);
+  // Add user_id column for user isolation — safe to run multiple times
+  try {
+    expoDb.execSync("ALTER TABLE tasks ADD COLUMN user_id TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists — ignore
+  }
 }

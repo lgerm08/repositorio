@@ -2,6 +2,7 @@ import { Task } from '../../core/entities/Task';
 import { ITaskRepository } from '../../domain/repositories/ITaskRepository';
 import { TaskRemoteDataSource } from '../datasources/remote/TaskRemoteDataSource';
 import { TaskLocalDataSource } from '../datasources/local/TaskLocalDataSource';
+import { AuthLocalDataSource } from '../datasources/local/AuthLocalDataSource';
 
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -13,27 +14,47 @@ function generateId(): string {
 export class TaskRepositoryImpl implements ITaskRepository {
   private remote = new TaskRemoteDataSource();
   private local = new TaskLocalDataSource();
+  private authLocal = new AuthLocalDataSource();
+
+  private getUserId(): string {
+    return this.authLocal.getUser()?.id ?? '';
+  }
 
   async getTasks(): Promise<Task[]> {
-    try {
-      const remoteTasks = await this.remote.getTasks();
-      for (const rt of remoteTasks) {
-        this.local.upsertFromServer(rt.id, rt.name, rt.checked);
+    const userId = this.getUserId();
+    const localTasks = this.local.getAll(userId);
+
+    if (localTasks.length === 0) {
+      // No local tasks — pull from API to seed local (Rule 5)
+      try {
+        const remoteTasks = await this.remote.getTasks();
+        for (const rt of remoteTasks) {
+          this.local.upsertFromServer(rt.id, rt.name, rt.checked, userId);
+        }
+      } catch {
+        // offline — return empty list
       }
-    } catch {
-      // offline — fall back to local only
+    } else {
+      // Local tasks exist — push pending to API, never overwrite local (Rule 5)
+      try {
+        await this.syncPending();
+      } catch {
+        // offline — keep local as-is
+      }
     }
-    return this.local.getAll();
+
+    return this.local.getAll(userId);
   }
 
   async createTask(name: string): Promise<Task> {
+    const userId = this.getUserId();
     const localTask: Task = {
       id: generateId(),
       name,
       checked: false,
       syncStatus: 'pending',
     };
-    this.local.insert(localTask);
+    this.local.insert(localTask, userId);
 
     try {
       const remote = await this.remote.createTask(name);
@@ -65,21 +86,25 @@ export class TaskRepositoryImpl implements ITaskRepository {
     const task = this.local.getById(id);
     if (!task) return;
 
-    this.local.softDelete(id);
-
-    if (task.serverId) {
-      try {
-        await this.remote.deleteTask(task.serverId);
-      } catch {
-        // Will retry in syncPending
-      }
+    if (!task.serverId) {
+      // Never reached the server — just wipe locally
+      this.local.hardDelete(id);
+      return;
     }
-    this.local.hardDelete(id);
+
+    this.local.softDelete(id);
+    try {
+      await this.remote.deleteTask(task.serverId);
+      this.local.hardDelete(id);
+    } catch {
+      // Stays as deleted=1, picked up by syncPending on next sync
+    }
   }
 
   async syncPending(): Promise<void> {
-    // Sync pending creates
-    const pendingCreates = this.local.getPending().filter((t) => !t.serverId);
+    const userId = this.getUserId();
+
+    const pendingCreates = this.local.getPending(userId).filter((t) => !t.serverId);
     for (const task of pendingCreates) {
       try {
         const remote = await this.remote.createTask(task.name);
@@ -89,8 +114,7 @@ export class TaskRepositoryImpl implements ITaskRepository {
       }
     }
 
-    // Sync pending updates
-    const pendingUpdates = this.local.getPending().filter((t) => !!t.serverId);
+    const pendingUpdates = this.local.getPending(userId).filter((t) => !!t.serverId);
     for (const task of pendingUpdates) {
       try {
         await this.remote.updateTask(task.serverId!, { name: task.name, checked: task.checked });
@@ -100,13 +124,12 @@ export class TaskRepositoryImpl implements ITaskRepository {
       }
     }
 
-    // Sync pending deletes
-    const pendingDeletes = this.local.getPendingDeletes();
+    const pendingDeletes = this.local.getPendingDeletes(userId);
     for (const task of pendingDeletes) {
       try {
         await this.remote.deleteTask(task.serverId!);
       } catch {
-        // ignore
+        // ignore — row stays for next retry
       } finally {
         this.local.hardDelete(task.id);
       }
