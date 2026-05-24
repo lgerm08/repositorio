@@ -12,7 +12,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/useAppTheme';
 import { typography } from '../theme/typography';
 import { Button } from './Button';
@@ -61,17 +61,117 @@ function useKeyboardHeight(): number {
 
 const SLIDE_DISTANCE = 600;
 
-export function BottomModal(props: BottomModalProps) {
-  const { visible, onClose, type } = props;
-  const { colors, isDark } = useAppTheme();
+// Inner sheet — rendered inside SafeAreaProvider so useSafeAreaInsets reads
+// the correct insets for the Modal's own window (not the main app window).
+type SheetProps = {
+  props: BottomModalProps;
+  sheetBg: string;
+  textColor: string;
+  placeholderColor: string;
+  marginBottom: number;
+  slideAnim: Animated.Value;
+};
+
+function ModalSheet({ props, sheetBg, textColor, placeholderColor, marginBottom, slideAnim }: SheetProps) {
+  const { onClose, type } = props;
   const insets = useSafeAreaInsets();
   const [value, setValue] = useState('');
   const inputRef = useRef<TextInput>(null);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitting = useRef(false);
+
+  const { colors } = useAppTheme();
+
+  useEffect(() => {
+    if (!props.visible) {
+      setValue('');
+      submitting.current = false;
+      if (blurTimer.current) clearTimeout(blurTimer.current);
+    } else if (type === 'form') {
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [props.visible, type]);
+
+  const handleFormBlur = () => {
+    if (submitting.current) return;
+    blurTimer.current = setTimeout(() => onClose(), 200);
+  };
+
+  const handleFormSubmit = () => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    submitting.current = true;
+    if (blurTimer.current) clearTimeout(blurTimer.current);
+    (props as FormProps).onSubmit(trimmed);
+    onClose();
+  };
+
+  const paddingBottom = insets.bottom + 24;
+
+  return (
+    <Animated.View
+      style={[
+        styles.sheet,
+        { backgroundColor: sheetBg, paddingBottom, marginBottom },
+        { transform: [{ translateY: slideAnim }] },
+      ]}
+    >
+      {type === 'confirmation' ? (
+        <>
+          <Text style={[styles.title, { color: textColor }]}>
+            Tem certeza que deseja excluir essa tarefa?
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.gray500 }]}>
+            Essa ação não pode ser revertida
+          </Text>
+          <Button
+            label="Excluir tarefa"
+            onPress={() => {
+              (props as ConfirmationProps).onConfirm();
+              onClose();
+            }}
+            backgroundColor={colors.red}
+            textColor="#ffffff"
+          />
+        </>
+      ) : (
+        <>
+          <Text style={[styles.title, { color: textColor }]}>
+            Qual é a sua tarefa?
+          </Text>
+          <TextInput
+            ref={inputRef}
+            style={[styles.input, { color: textColor }]}
+            placeholder="Fazer compras"
+            placeholderTextColor={placeholderColor}
+            value={value}
+            onChangeText={setValue}
+            autoFocus
+            autoCapitalize="sentences"
+            autoCorrect={false}
+            returnKeyType="done"
+            onBlur={handleFormBlur}
+            onSubmitEditing={handleFormSubmit}
+          />
+          <Button
+            label="Adicionar tarefa"
+            onPress={handleFormSubmit}
+            backgroundColor={colors.primary}
+            textColor="#ffffff"
+            disabled={!value.trim()}
+          />
+        </>
+      )}
+    </Animated.View>
+  );
+}
+
+export function BottomModal(props: BottomModalProps) {
+  const { visible, onClose } = props;
+  const { colors, isDark } = useAppTheme();
   const keyboardHeight = useKeyboardHeight();
 
-  // Internal visibility kept open during slide-out animation
   const [internalVisible, setInternalVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(SLIDE_DISTANCE)).current;
 
@@ -98,38 +198,7 @@ export function BottomModal(props: BottomModalProps) {
   const sheetBg = isDark ? colors.gray900 : colors.background;
   const textColor = isDark ? '#ffffff' : colors.gray950;
   const placeholderColor = isDark ? colors.gray600 : colors.gray300;
-
-  useEffect(() => {
-    if (!visible) {
-      setValue('');
-      submitting.current = false;
-      if (blurTimer.current) clearTimeout(blurTimer.current);
-    } else if (type === 'form') {
-      const t = setTimeout(() => inputRef.current?.focus(), 100);
-      return () => clearTimeout(t);
-    }
-  }, [visible, type]);
-
-  const handleFormBlur = () => {
-    if (submitting.current) return;
-    blurTimer.current = setTimeout(() => {
-      onClose();
-    }, 200);
-  };
-
-  const handleFormSubmit = () => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    submitting.current = true;
-    if (blurTimer.current) clearTimeout(blurTimer.current);
-    (props as FormProps).onSubmit(trimmed);
-    onClose();
-  };
-
-  // Sheet slides above the keyboard when it appears.
-  // paddingBottom covers the home-indicator area with the sheet background color.
   const marginBottom = keyboardHeight > 0 ? keyboardHeight : 0;
-  const paddingBottom = insets.bottom + 24;
 
   return (
     <Modal
@@ -139,64 +208,21 @@ export function BottomModal(props: BottomModalProps) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-
-        <Animated.View
-          style={[
-            styles.sheet,
-            { backgroundColor: sheetBg, paddingBottom, marginBottom },
-            { transform: [{ translateY: slideAnim }] },
-          ]}
-        >
-          {type === 'confirmation' ? (
-            <>
-              <Text style={[styles.title, { color: textColor }]}>
-                Tem certeza que deseja excluir essa tarefa?
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.gray500 }]}>
-                Essa ação não pode ser revertida
-              </Text>
-              <Button
-                label="Excluir tarefa"
-                onPress={() => {
-                  (props as ConfirmationProps).onConfirm();
-                  onClose();
-                }}
-                backgroundColor={colors.red}
-                textColor="#ffffff"
-              />
-            </>
-          ) : (
-            <>
-              <Text style={[styles.title, { color: textColor }]}>
-                Qual é a sua tarefa?
-              </Text>
-              <TextInput
-                ref={inputRef}
-                style={[styles.input, { color: textColor }]}
-                placeholder="Fazer compras"
-                placeholderTextColor={placeholderColor}
-                value={value}
-                onChangeText={setValue}
-                autoFocus
-                autoCapitalize="sentences"
-                autoCorrect={false}
-                returnKeyType="done"
-                onBlur={handleFormBlur}
-                onSubmitEditing={handleFormSubmit}
-              />
-              <Button
-                label="Adicionar tarefa"
-                onPress={handleFormSubmit}
-                backgroundColor={colors.primary}
-                textColor="#ffffff"
-                disabled={!value.trim()}
-              />
-            </>
-          )}
-        </Animated.View>
-      </View>
+      {/* SafeAreaProvider inside Modal ensures useSafeAreaInsets reads
+          the correct insets for the Modal's own native window. */}
+      <SafeAreaProvider>
+        <View style={styles.overlay}>
+          <Pressable style={styles.backdrop} onPress={onClose} />
+          <ModalSheet
+            props={props}
+            sheetBg={sheetBg}
+            textColor={textColor}
+            placeholderColor={placeholderColor}
+            marginBottom={marginBottom}
+            slideAnim={slideAnim}
+          />
+        </View>
+      </SafeAreaProvider>
     </Modal>
   );
 }
